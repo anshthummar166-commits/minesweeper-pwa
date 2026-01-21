@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<title>Minesweeper Mobile</title>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+body{
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    background:radial-gradient(circle at top,#0f172a,#020617);
+    font-family:system-ui,Segoe UI;
+    color:white;
+}
+
+.container{
+    background:rgba(255,255,255,0.1);
+    backdrop-filter:blur(16px);
+    border-radius:26px;
+    padding:24px;
+    box-shadow:0 30px 80px rgba(0,0,0,.6);
+    text-align:center;
+}
+
+h1{
+    font-size:2.5em;
+    margin-bottom:10px;
+    background:linear-gradient(135deg,#22c55e,#38bdf8);
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+}
+
+.difficulty-panel{
+    display:flex;
+    gap:10px;
+    justify-content:center;
+    margin:15px 0;
+}
+
+.diff-btn{
+    padding:10px 22px;
+    border-radius:999px;
+    border:none;
+    cursor:pointer;
+    font-weight:700;
+    background:linear-gradient(135deg,#334155,#020617);
+    color:white;
+    transition:.3s;
+}
+
+.diff-btn.active{
+    background:linear-gradient(135deg,#22c55e,#16a34a);
+    box-shadow:0 0 20px rgba(34,197,94,.8);
+}
+
+.info{
+    display:flex;
+    justify-content:space-between;
+    margin:15px 0;
+    font-size:.9em;
+}
+
+.game-board{
+    display:inline-grid;
+    gap:6px;
+    margin:18px 0;
+}
+
+.cell{
+    width:48px;
+    height:48px;
+    border-radius:12px;
+    background:linear-gradient(145deg,#334155,#1e293b);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:1.2em;
+    font-weight:900;
+    user-select:none;
+    touch-action:manipulation;
+}
+
+.cell.revealed{
+    background:linear-gradient(145deg,#e5e7eb,#cbd5f5);
+    color:black;
+}
+
+.cell.flagged{
+    background:linear-gradient(145deg,#fde68a,#facc15);
+}
+
+.cell.mine{
+    background:linear-gradient(145deg,#ef4444,#991b1b);
+    color:white;
+}
+
+.num1{color:#2563eb}
+.num2{color:#16a34a}
+.num3{color:#dc2626}
+.num4{color:#1e40af}
+.num5{color:#991b1b}
+.num6{color:#0d9488}
+.num7{color:#000}
+.num8{color:#374151}
+
+button.main{
+    padding:12px 36px;
+    border-radius:14px;
+    border:none;
+    font-weight:800;
+    background:linear-gradient(135deg,#22c55e,#16a34a);
+    margin-top:10px;
+}
+
+.message{
+    margin-top:10px;
+    font-size:1.2em;
+    font-weight:800;
+}
+
+.win{color:#22c55e}
+.lose{color:#ef4444}
+</style>
+</head>
+
+<body>
+<div class="container">
+<h1>⛏️ MINESWEEPER</h1>
+
+<div class="difficulty-panel">
+<button class="diff-btn active" onclick="setDifficulty('easy',this)">Easy</button>
+<button class="diff-btn" onclick="setDifficulty('medium',this)">Medium</button>
+<button class="diff-btn" onclick="setDifficulty('hard',this)">Hard</button>
+</div>
+
+<div class="info">
+<div>💣 <span id="mineCount">10</span></div>
+<div>🚩 <span id="flagCount">0</span></div>
+<div>✓ <span id="revealCount">0</span></div>
+</div>
+
+<div id="gameBoard" class="game-board"></div>
+
+<div id="message" class="message"></div>
+
+<button class="main" onclick="newGame()">🔄 New Game</button>
+</div>
+
+<script>
+const LEVELS={
+ easy:{r:8,c:8,m:10},
+ medium:{r:10,c:10,m:20},
+ hard:{r:12,c:12,m:30}
+};
+
+let ROWS=8,COLS=8,MINES=10;
+let board=[],revealed=[],flagged=[];
+let firstClick=true,gameOver=false;
+let pressTimer=null;
+
+function setDifficulty(level,btn){
+ document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('active'));
+ btn.classList.add('active');
+ ROWS=LEVELS[level].r;
+ COLS=LEVELS[level].c;
+ MINES=LEVELS[level].m;
+ document.getElementById('mineCount').textContent=MINES;
+ newGame();
+}
+
+function newGame(){
+ board=Array(ROWS).fill().map(()=>Array(COLS).fill(0));
+ revealed=Array(ROWS).fill().map(()=>Array(COLS).fill(false));
+ flagged=Array(ROWS).fill().map(()=>Array(COLS).fill(false));
+ firstClick=true; gameOver=false;
+ document.getElementById('message').textContent='';
+ render();
+}
+
+function placeMines(sr,sc){
+ let p=0;
+ while(p<MINES){
+  let r=Math.floor(Math.random()*ROWS);
+  let c=Math.floor(Math.random()*COLS);
+  if(board[r][c]===0 && Math.abs(r-sr)>1 && Math.abs(c-sc)>1){
+   board[r][c]=-1;p++;
+  }
+ }
+}
+
+function calc(){
+ for(let r=0;r<ROWS;r++)
+  for(let c=0;c<COLS;c++)
+   if(board[r][c]!==-1){
+    let n=0;
+    for(let dr=-1;dr<=1;dr++)
+     for(let dc=-1;dc<=1;dc++){
+      let rr=r+dr,cc=c+dc;
+      if(rr>=0&&cc>=0&&rr<ROWS&&cc<COLS&&board[rr][cc]===-1) n++;
+     }
+    board[r][c]=n;
+   }
+}
+
+function render(){
+ const g=document.getElementById('gameBoard');
+ g.innerHTML='';
+ g.style.gridTemplateColumns=`repeat(${COLS},48px)`;
+
+ let f=0,rn=0;
+
+ for(let r=0;r<ROWS;r++)
+  for(let c=0;c<COLS;c++){
+   const d=document.createElement('div');
+   d.className='cell';
+
+   if(revealed[r][c]){
+    d.classList.add('revealed');rn++;
+    if(board[r][c]===-1){d.classList.add('mine');d.textContent='💣'}
+    else if(board[r][c]>0){d.textContent=board[r][c];d.classList.add('num'+board[r][c])}
+   }else if(flagged[r][c]){d.classList.add('flagged');d.textContent='🚩';f++}
+
+   d.addEventListener('touchstart',()=>pressTimer=setTimeout(()=>toggleFlag(r,c),450));
+   d.addEventListener('touchend',()=>{clearTimeout(pressTimer);tap(r,c)});
+   g.appendChild(d);
+  }
+
+ document.getElementById('flagCount').textContent=f;
+ document.getElementById('revealCount').textContent=rn;
+}
+
+function tap(r,c){
+ if(gameOver||flagged[r][c]||revealed[r][c])return;
+ if(firstClick){placeMines(r,c);calc();firstClick=false}
+ if(board[r][c]===-1){gameOver=true;revealAll();msg('💥 Game Over','lose');return}
+ open(r,c);checkWin();render();
+}
+
+function toggleFlag(r,c){
+ if(!revealed[r][c]){flagged[r][c]=!flagged[r][c];render()}
+}
+
+function open(r,c){
+ if(r<0||c<0||r>=ROWS||c>=COLS||revealed[r][c]||flagged[r][c])return;
+ revealed[r][c]=true;
+ if(board[r][c]===0)
+  for(let dr=-1;dr<=1;dr++)
+   for(let dc=-1;dc<=1;dc++) open(r+dr,c+dc);
+}
+
+function revealAll(){
+ for(let r=0;r<ROWS;r++)
+  for(let c=0;c<COLS;c++) if(board[r][c]===-1) revealed[r][c]=true;
+ render();
+}
+
+function checkWin(){
+ for(let r=0;r<ROWS;r++)
+  for(let c=0;c<COLS;c++)
+   if(board[r][c]!==-1&&!revealed[r][c])return;
+ msg('🎉 You Win!','win');gameOver=true;
+}
+
+function msg(t,cl){
+ const m=document.getElementById('message');
+ m.textContent=t;m.className='message '+cl;
+}
+
+newGame();
+</script>
+</body>
+</html>
